@@ -2,7 +2,6 @@
 <!--                  MULTI AGENT RESEARCH SYSTEM               -->
 <!-- ========================================================= -->
 
-<div align="center">
 
 # 🚀 Multi-Agent Research System
 
