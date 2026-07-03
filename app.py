@@ -434,9 +434,14 @@ if result:
         st.markdown("</div>", unsafe_allow_html=True)
 
     with tab_scraped:
-        st.markdown('<div class="report-card">', unsafe_allow_html=True)
-        st.markdown(result.get("scraped_content", "_No scraped content._"))
-        st.markdown("</div>", unsafe_allow_html=True)
+        scraped = result.get("scraped_content", [])
+    if not scraped:
+        st.info("No scraped pages found.")
+    else:
+        for page in scraped:
+            st.markdown(f"## 🔗 {page['url']}")
+            st.markdown(page["content"])
+            st.divider()
 
     with tab_critic:
         st.markdown('<div class="report-card">', unsafe_allow_html=True)

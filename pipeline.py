@@ -90,7 +90,12 @@ IMPORTANT RULES:
                 ]
             }
         )
-
+        
+        print("=" * 80)
+        print(type(response["messages"][-1].content))
+        print(response["messages"][-1].content)
+        print("=" * 80)
+ 
         self.state["search_results"] = response["messages"][-1].content
         raw_result = str(self.state["search_results"])
         match = re.search(
