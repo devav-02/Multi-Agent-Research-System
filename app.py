@@ -433,15 +433,20 @@ if result:
         st.markdown(result.get("search_results", "_No search results._"))
         st.markdown("</div>", unsafe_allow_html=True)
 
+
     with tab_scraped:
         scraped = result.get("scraped_content", [])
     if not scraped:
         st.info("No scraped pages found.")
     else:
         for page in scraped:
-            st.markdown(f"## 🔗 {page['url']}")
-            st.markdown(page["content"])
+            st.write(page)
+            url = page.get("url") or page.get("source") or page.get("link") or "Unknown Source"
+            content = page.get("content") or page.get("markdown") or page.get("text") or "No Content"
+            st.markdown(f"### 🔗 {url}")
+            st.markdown(content)
             st.divider()
+
 
     with tab_critic:
         st.markdown('<div class="report-card">', unsafe_allow_html=True)
