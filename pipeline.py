@@ -128,11 +128,17 @@ IMPORTANT RULES:
         print("\n" + "=" * 80)
         print("🔗 STEP 2 : EXTRACT URLS")
         print("=" * 80)
+        
+        search_data = self.state["search_results"]
 
+        if isinstance(search_data, list):
+            search_data = "\n".join(str(item) for item in search_data)
+            
+            
         urls = re.findall(
-            r"https?://[^\s)>\]]+",
-            self.state["search_results"]
-        )
+            r"https?://[^\s\]\}]+",
+            search_data
+)  
 
         cleaned_urls = []
 
