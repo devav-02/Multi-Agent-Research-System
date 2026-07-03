@@ -10,14 +10,14 @@ the pipeline logic are required — this reads its stdout to animate the
 pipeline status cards live.
 """
 
-import io # This is for import the files
+import io # This is for import the files 
 import re
 import contextlib
 from datetime import datetime
 
 import streamlit as st
 
-from pipeline import run_research_pipeline
+from pipeline import ResearchPipeline
 
 
 # --------------------------------------------------------------------------
@@ -388,7 +388,8 @@ if run_clicked:
         try:
             with st.spinner("Agents are working..."):
                 with contextlib.redirect_stdout(writer):
-                    result = run_research_pipeline(topic)
+                    pipeline = ResearchPipeline()
+                    result = pipeline.run(topic)
 
             # mark the final step done
             last_title, last_desc = PIPELINE_STEPS[4]
