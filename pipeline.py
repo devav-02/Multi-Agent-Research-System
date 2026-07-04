@@ -11,6 +11,48 @@ from agents import (
 )
 
 
+# --------------------------------------------------------------------------
+# Helper — safely convert ANY chain/agent output to a plain str.
+#
+# LangChain chains can return:
+#   • a plain str                 → use as-is
+#   • an AIMessage object         → extract .content
+#   • a list of content blocks    → join all text blocks
+#   • anything else               → str() fallback
+# --------------------------------------------------------------------------
+def _to_str(value) -> str:
+    """Return a guaranteed plain-string representation of a chain output."""
+    if isinstance(value, str):
+        return value
+
+    # LangChain AIMessage (and BaseMessage subclasses)
+    if hasattr(value, "content"):
+        content = value.content
+        # content itself can be a list of dicts e.g. [{"type":"text","text":"..."}]
+        if isinstance(content, list):
+            return "\n".join(
+                block.get("text", str(block))
+                for block in content
+                if isinstance(block, dict)
+            )
+        return str(content)
+
+    # Raw list of strings or dicts
+    if isinstance(value, list):
+        parts = []
+        for item in value:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                parts.append(item.get("text", str(item)))
+            else:
+                parts.append(str(item))
+        return "\n".join(parts)
+
+    # Fallback
+    return str(value)
+
+
 class ResearchPipeline:
 
     def __init__(self):
@@ -241,13 +283,16 @@ IMPORTANT RULES:
         print("✍️ STEP 5 : GENERATING RESEARCH REPORT")
         print("=" * 80)
 
-        report = self.writer.invoke(
+        raw_report = self.writer.invoke(
             {
                 "topic":    self.state["topic"],
                 "research": self.state["combined_research"],
             }
         )
 
+        # FIX ── writer_chain may return AIMessage or list, not a plain str.
+        #         _to_str() safely extracts the text in all cases.
+        report = _to_str(raw_report)
         self.state["report"] = report
 
         print("✅ Report Generated Successfully")
@@ -264,12 +309,15 @@ IMPORTANT RULES:
         print("🧐 STEP 6 : REVIEWING REPORT")
         print("=" * 80)
 
-        feedback = self.critic.invoke(
+        raw_feedback = self.critic.invoke(
             {
                 "report": self.state["report"],
             }
         )
 
+        # FIX ── critic_chain may return AIMessage or list, not a plain str.
+        #         _to_str() safely extracts the text in all cases.
+        feedback = _to_str(raw_feedback)
         self.state["feedback"] = feedback
 
         print("✅ Critic Review Completed")
@@ -296,17 +344,19 @@ IMPORTANT RULES:
         search_path = "outputs/search_results.txt"
         scrape_path = "outputs/scraped_content.md"
 
+        # FIX ── f.write() only accepts str. _to_str() guards every field in
+        #         case any chain returned a non-string type (list, AIMessage…).
         with open(report_path, "w", encoding="utf-8") as f:
-            f.write(self.state["report"])
+            f.write(_to_str(self.state["report"]))
 
         with open(critic_path, "w", encoding="utf-8") as f:
-            f.write(self.state["feedback"])
+            f.write(_to_str(self.state["feedback"]))
 
         with open(search_path, "w", encoding="utf-8") as f:
-            f.write(self.state["search_results"])
+            f.write(_to_str(self.state["search_results"]))
 
         with open(scrape_path, "w", encoding="utf-8") as f:
-            f.write(self.state["combined_research"])
+            f.write(_to_str(self.state["combined_research"]))
 
         print("✅ Outputs Saved Successfully")
 
