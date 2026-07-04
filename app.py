@@ -390,7 +390,17 @@ if run_clicked:
                 with contextlib.redirect_stdout(writer):
                     pipeline = ResearchPipeline()
                     result = pipeline.run(topic)
+                    print("=" * 80)
+                    print("RESULT TYPE:", type(result))
+                    print("RESULT KEYS:", result.keys())
 
+                    print("SEARCH TYPE:", type(result["search_results"]))
+                    print("SCRAPED TYPE:", type(result["scraped_content"]))
+                    print("REPORT TYPE:", type(result["report"]))
+                    print("FEEDBACK TYPE:", type(result["feedback"]))
+                    print("=" * 80)
+                    
+                    
             # mark the final step done
             last_title, last_desc = PIPELINE_STEPS[4]
             render_card(card_placeholders[4], 4, last_title, last_desc, "DONE")
@@ -440,7 +450,7 @@ if result:
         st.info("No scraped pages found.")
     else:
         for page in scraped:
-            st.write(page)
+            #st.write(page)
             url = page.get("url") or page.get("source") or page.get("link") or "Unknown Source"
             content = page.get("content") or page.get("markdown") or page.get("text") or "No Content"
             st.markdown(f"### 🔗 {url}")
