@@ -1,8 +1,11 @@
 from dotenv import load_dotenv
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
+
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+
 from tools import web_search, scrape_url
 
 load_dotenv()
@@ -16,7 +19,7 @@ llm = ChatGoogleGenerativeAI(
     temperature=0,
 )
 
-
+# =====================================================
 # SEARCH AGENT
 # =====================================================
 
@@ -28,28 +31,23 @@ def build_search_agent():
         prompt="""
 You are a Search Agent.
 
+Your only job is searching.
+
 Rules:
 
-1. ALWAYS call the web_search tool.
-
-2. NEVER answer from your own knowledge.
-
-3. NEVER summarize.
-
-4. NEVER rewrite tool output.
-
-5. Return the tool output exactly as received.
-
-6. Preserve every URL.
-
-7. Preserve every snippet.
-
-8. Preserve every title.
+1. ALWAYS use the web_search tool.
+2. NEVER answer using your own knowledge.
+3. NEVER summarize search results.
+4. NEVER rewrite search results.
+5. Return tool output exactly as received.
+6. Preserve every title.
+7. Preserve every URL.
+8. Preserve every snippet.
 """
     )
 
 
-
+# =====================================================
 # READER AGENT
 # =====================================================
 
@@ -63,36 +61,41 @@ You are a Reader Agent.
 
 Rules:
 
-- ALWAYS call scrape_url.
-- Read the complete webpage.
-- Ignore advertisements.
-- Ignore navigation.
-- Return only extracted webpage content.
+1. ALWAYS call scrape_url.
+2. Read the webpage.
+3. Ignore advertisements.
+4. Ignore menus.
+5. Ignore navigation.
+6. Return only the webpage content.
 """
     )
 
 
 # =====================================================
-# WRITER
+# WRITER CHAIN
 # =====================================================
 
-writer_prompt = ChatPromptTemplate.from_messages([
-(
-"system",
+writer_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+You are an expert technical research writer.
+
+Rules:
+
+- Use ONLY the supplied research.
+- Never invent information.
+- Never hallucinate.
+- Write a clean professional report.
+- Use proper markdown headings.
+- Use bullet points where appropriate.
+- End with a concise conclusion.
 """
-You are an expert research writer.
-
-Write professional reports.
-
-Never invent facts.
-
-Use only the supplied research.
-"""
-),
-
-(
-"human",
-"""
+        ),
+        (
+            "human",
+            """
 Topic:
 
 {topic}
@@ -101,37 +104,66 @@ Research:
 
 {research}
 """
+        ),
+    ]
 )
-])
 
-writer_chain = writer_prompt | llm | StrOutputParser()
-
+writer_chain = (
+    writer_prompt
+    | llm
+    | StrOutputParser()
+)
 
 # =====================================================
-# CRITIC
+# CRITIC CHAIN
 # =====================================================
 
-critic_prompt = ChatPromptTemplate.from_messages([
-     ("system", "You are a sharp and constructive research critic. Be honest and specific."),
-    ("human", """Review the research report below and evaluate it strictly.
+critic_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+You are a professional research reviewer.
 
-Report:
+Evaluate reports honestly.
+
+Never rewrite the report.
+
+Only review it.
+"""
+        ),
+        (
+            "human",
+            """
+Review this report.
+
 {report}
 
-Respond in this exact format:
+Return EXACTLY this format.
 
 Score: X/10
 
-Strengths:
+Strengths
 - ...
 - ...
 
-Areas to Improve:
+Weaknesses
 - ...
 - ...
 
-One line verdict:
-..."""),
-])
+Suggestions
+- ...
+- ...
 
-critic_chain = critic_prompt | llm | StrOutputParser()
+Final Verdict
+...
+"""
+        ),
+    ]
+)
+
+critic_chain = (
+    critic_prompt
+    | llm
+    | StrOutputParser()
+)

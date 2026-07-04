@@ -10,13 +10,15 @@ the pipeline logic are required — this reads its stdout to animate the
 pipeline status cards live.
 """
 
-import io # This is for import the files 
+# ── Standard library ──────────────────────────────────────────────────────
+import io
 import re
 import contextlib
-from datetime import datetime
 
+# ── Third-party ───────────────────────────────────────────────────────────
 import streamlit as st
 
+# ── Local ─────────────────────────────────────────────────────────────────
 from pipeline import ResearchPipeline
 
 
@@ -29,6 +31,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
 
 # --------------------------------------------------------------------------
 # Global styling
@@ -242,16 +245,16 @@ st.markdown(
 # Pipeline metadata + status card renderer
 # --------------------------------------------------------------------------
 PIPELINE_STEPS = {
-    1: ("Search Agent", "Gathers recent web information"),
-    2: ("Reader Agent", "Scrapes & extracts deep content"),
-    3: ("Writer Chain", "Drafts the full research report"),
-    4: ("Critic Chain", "Reviews & scores the report"),
+    1: ("Search Agent",  "Gathers recent web information"),
+    2: ("Reader Agent",  "Scrapes & extracts deep content"),
+    3: ("Writer Chain",  "Drafts the full research report"),
+    4: ("Critic Chain",  "Reviews & scores the report"),
 }
 
 STATUS_STYLES = {
     "WAITING": ("#6b7280", "rgba(255,255,255,0.05)", ""),
-    "RUNNING": ("#fb923c", "rgba(251,146,60,0.14)", "pc-running"),
-    "DONE":    ("#22c55e", "rgba(34,197,94,0.14)", ""),
+    "RUNNING": ("#fb923c", "rgba(251,146,60,0.14)",  "pc-running"),
+    "DONE":    ("#22c55e", "rgba(34,197,94,0.14)",   ""),
 }
 
 STEP_MARKERS = {
@@ -262,7 +265,8 @@ STEP_MARKERS = {
 }
 
 
-def render_card(placeholder, num, title, desc, status):
+def render_card(placeholder, num: int, title: str, desc: str, status: str) -> None:
+    """Render a single pipeline status card into the given Streamlit placeholder."""
     color, bg, anim_class = STATUS_STYLES[status]
     placeholder.markdown(
         f"""
@@ -281,42 +285,71 @@ def render_card(placeholder, num, title, desc, status):
     )
 
 
+# --------------------------------------------------------------------------
+# FIX 1 ── StreamlitLogWriter
+#   • Inherits io.StringIO so contextlib.redirect_stdout accepts it.
+#   • flush() is a no-op (Streamlit is event-driven; no real stream to flush).
+# --------------------------------------------------------------------------
 class StreamlitLogWriter(io.StringIO):
     """Redirects pipeline.py's print() output into the UI, and parses it
     to advance the pipeline status cards live."""
 
-    def __init__(self, log_placeholder, card_placeholders):
+    def __init__(self, log_placeholder, card_placeholders: dict) -> None:
         super().__init__()
-        self.log_placeholder = log_placeholder
+        self.log_placeholder   = log_placeholder
         self.card_placeholders = card_placeholders
-        self.buffer = ""
-        self.triggered = set()
+        self.buffer            = ""
+        self.triggered: set    = set()
 
-    def write(self, s):
+    def write(self, s: str) -> int:
         self.buffer += s
         low = self.buffer.lower()
 
         for marker, step_num in STEP_MARKERS.items():
             if marker in low and step_num not in self.triggered:
                 self.triggered.add(step_num)
+
+                # Mark the previous step as DONE
                 if step_num > 1:
                     prev_title, prev_desc = PIPELINE_STEPS[step_num - 1]
-                    render_card(self.card_placeholders[step_num - 1], step_num - 1, prev_title, prev_desc, "DONE")
-                cur_title, cur_desc = PIPELINE_STEPS[step_num]
-                render_card(self.card_placeholders[step_num], step_num, cur_title, cur_desc, "RUNNING")
+                    render_card(
+                        self.card_placeholders[step_num - 1],
+                        step_num - 1,
+                        prev_title,
+                        prev_desc,
+                        "DONE",
+                    )
 
+                # Mark the current step as RUNNING
+                cur_title, cur_desc = PIPELINE_STEPS[step_num]
+                render_card(
+                    self.card_placeholders[step_num],
+                    step_num,
+                    cur_title,
+                    cur_desc,
+                    "RUNNING",
+                )
+
+        # Live-update the log box (show last 4 000 chars to avoid DOM bloat)
         if self.log_placeholder is not None:
-            safe = re.sub(r"[<>]", lambda m: "&lt;" if m.group() == "<" else "&gt;", self.buffer[-4000:])
-            self.log_placeholder.markdown(f'<div class="log-box">{safe}</div>', unsafe_allow_html=True)
+            safe = re.sub(
+                r"[<>]",
+                lambda m: "&lt;" if m.group() == "<" else "&gt;",
+                self.buffer[-4000:],
+            )
+            self.log_placeholder.markdown(
+                f'<div class="log-box">{safe}</div>',
+                unsafe_allow_html=True,
+            )
 
         return len(s)
 
-    def flush(self):
+    def flush(self) -> None:  # required by io interface; intentionally empty
         pass
 
 
 # --------------------------------------------------------------------------
-# Session state
+# Session state initialisation
 # --------------------------------------------------------------------------
 if "result" not in st.session_state:
     st.session_state.result = None
@@ -326,7 +359,8 @@ if "topic_input" not in st.session_state:
     st.session_state.topic_input = ""
 
 
-def set_topic(value):
+def set_topic(value: str) -> None:
+    """Callback used by the suggestion chips to populate the text input."""
     st.session_state.topic_input = value
 
 
@@ -362,54 +396,61 @@ with left:
 
 with right:
     st.markdown('<div class="pipeline-heading">Pipeline</div>', unsafe_allow_html=True)
-    card_placeholders = {}
+    card_placeholders: dict = {}
     for num, (title, desc) in PIPELINE_STEPS.items():
         card_placeholders[num] = st.empty()
         render_card(card_placeholders[num], num, title, desc, "WAITING")
 
+
+# --------------------------------------------------------------------------
+# Live log expander — defined AFTER the two-column layout so it spans
+# the full width below both columns.
+# --------------------------------------------------------------------------
 log_expander = st.expander("🖥️ View live agent logs", expanded=False)
 with log_expander:
     log_placeholder = st.empty()
-    log_placeholder.markdown('<div class="log-box">Logs will appear here once the pipeline runs...</div>', unsafe_allow_html=True)
+    log_placeholder.markdown(
+        '<div class="log-box">Logs will appear here once the pipeline runs...</div>',
+        unsafe_allow_html=True,
+    )
+
 
 # --------------------------------------------------------------------------
 # Run pipeline
 # --------------------------------------------------------------------------
 if run_clicked:
     topic = st.session_state.topic_input.strip()
+
     if not topic:
         st.warning("Please enter a research topic first.")
     else:
-        # reset cards to WAITING before starting a fresh run
+        # Reset all cards to WAITING before starting a fresh run
         for num, (title, desc) in PIPELINE_STEPS.items():
             render_card(card_placeholders[num], num, title, desc, "WAITING")
 
         writer = StreamlitLogWriter(log_placeholder, card_placeholders)
+
         try:
-            with st.spinner("Agents are working..."):
+            with st.spinner("Agents are working…"):
                 with contextlib.redirect_stdout(writer):
                     pipeline = ResearchPipeline()
-                    result = pipeline.run(topic)
-                    print("=" * 80)
-                    print("RESULT TYPE:", type(result))
-                    print("RESULT KEYS:", result.keys())
+                    result   = pipeline.run(topic)
 
-                    print("SEARCH TYPE:", type(result["search_results"]))
-                    print("SCRAPED TYPE:", type(result["scraped_content"]))
-                    print("REPORT TYPE:", type(result["report"]))
-                    print("FEEDBACK TYPE:", type(result["feedback"]))
-                    print("=" * 80)
-                    
-                    
-            # mark the final step done
+            # FIX 2 ── All debug print() calls removed from production code.
+            #           If you need to inspect the result shape during development,
+            #           use the live log box or Python logging instead.
+
+            # Mark the final step as DONE
             last_title, last_desc = PIPELINE_STEPS[4]
             render_card(card_placeholders[4], 4, last_title, last_desc, "DONE")
 
-            st.session_state.result = result
+            st.session_state.result    = result
             st.session_state.ran_topic = topic
             st.toast("Research pipeline complete ✅")
+
         except Exception as e:
             st.error(f"Something went wrong: {e}")
+
 
 # --------------------------------------------------------------------------
 # Results
@@ -418,7 +459,8 @@ result = st.session_state.result
 
 if result:
     st.markdown(
-        f'<div class="results-heading">Results for <span class="accent">{st.session_state.ran_topic}</span></div>',
+        f'<div class="results-heading">Results for '
+        f'<span class="accent">{st.session_state.ran_topic}</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -426,6 +468,7 @@ if result:
         ["📄 Final Report", "🔍 Search Results", "📖 Scraped Content", "🧐 Critic Feedback"]
     )
 
+    # ── Tab 1: Final Report ────────────────────────────────────────────────
     with tab_report:
         st.markdown('<div class="report-card">', unsafe_allow_html=True)
         st.markdown(result.get("report", "_No report generated._"))
@@ -438,26 +481,30 @@ if result:
             mime="text/markdown",
         )
 
+    # ── Tab 2: Search Results ──────────────────────────────────────────────
     with tab_search:
         st.markdown('<div class="report-card">', unsafe_allow_html=True)
         st.markdown(result.get("search_results", "_No search results._"))
         st.markdown("</div>", unsafe_allow_html=True)
 
-
+    # ── Tab 3: Scraped Content ─────────────────────────────────────────────
+    # FIX 3 ── The `if/else` block was accidentally outdented OUTSIDE the
+    #           `with tab_scraped:` context manager, so scraped content was
+    #           rendered below all tabs instead of inside the correct tab.
+    #           Both branches are now properly indented inside `with tab_scraped`.
     with tab_scraped:
         scraped = result.get("scraped_content", [])
-    if not scraped:
-        st.info("No scraped pages found.")
-    else:
-        for page in scraped:
-            #st.write(page)
-            url = page.get("url") or page.get("source") or page.get("link") or "Unknown Source"
-            content = page.get("content") or page.get("markdown") or page.get("text") or "No Content"
-            st.markdown(f"### 🔗 {url}")
-            st.markdown(content)
-            st.divider()
+        if not scraped:
+            st.info("No scraped pages found.")
+        else:
+            for page in scraped:
+                url     = page.get("url") or page.get("source") or page.get("link") or "Unknown Source"
+                content = page.get("content") or page.get("markdown") or page.get("text") or "No Content"
+                st.markdown(f"### 🔗 {url}")
+                st.markdown(content)
+                st.divider()
 
-
+    # ── Tab 4: Critic Feedback ─────────────────────────────────────────────
     with tab_critic:
         st.markdown('<div class="report-card">', unsafe_allow_html=True)
         st.markdown(result.get("feedback", "_No critic feedback._"))

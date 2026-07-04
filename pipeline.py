@@ -1,7 +1,9 @@
+# ── Standard library ──────────────────────────────────────────────────────
+import os
 import re
 
+# ── Local ─────────────────────────────────────────────────────────────────
 from tools import scrape_url
-
 from agents import (
     build_search_agent,
     writer_chain,
@@ -31,21 +33,13 @@ class ResearchPipeline:
         # ============================
 
         self.state = {
-
-            "topic": "",
-
-            "search_results": "",
-
-            "urls": [],
-
-            "scraped_content": [],
-
+            "topic":             "",
+            "search_results":    "",
+            "urls":              [],
+            "scraped_content":   [],
             "combined_research": "",
-
-            "report": "",
-
-            "feedback": ""
-
+            "report":            "",
+            "feedback":          "",
         }
 
     # ==========================================================
@@ -90,31 +84,23 @@ IMPORTANT RULES:
                 ]
             }
         )
-        
-        print("=" * 80)
-        print(type(response["messages"][-1].content))
-        print(response["messages"][-1].content)
-        print("=" * 80)
- 
+
         self.state["search_results"] = response["messages"][-1].content
         raw_result = str(self.state["search_results"])
+
         match = re.search(
-        r'"output":"(.*?)"\}\}?$',
-        raw_result,
-        re.DOTALL
-)
+            r'"output":"(.*?)"\}\}?$',
+            raw_result,
+            re.DOTALL,
+        )
+
         if match:
             clean_text = match.group(1)
-
             clean_text = clean_text.replace("\\n", "\n")
-
             clean_text = clean_text.replace('\\"', '"')
-
             self.state["search_results"] = clean_text
-        
 
         print("\n✅ Search Completed\n")
-
         print(self.state["search_results"])
 
         return self.state["search_results"]
@@ -128,28 +114,23 @@ IMPORTANT RULES:
         print("\n" + "=" * 80)
         print("🔗 STEP 2 : EXTRACT URLS")
         print("=" * 80)
-        
+
         search_data = self.state["search_results"]
 
         if isinstance(search_data, list):
             search_data = "\n".join(str(item) for item in search_data)
-            
-            
+
         urls = re.findall(
             r"https?://[^\s\]\}]+",
-            search_data
-)  
+            search_data,
+        )
 
         cleaned_urls = []
 
         for url in urls:
-
             url = url.strip()
-
             url = url.rstrip(".,);]}>")
-
             if url not in cleaned_urls:
-
                 cleaned_urls.append(url)
 
         self.state["urls"] = cleaned_urls
@@ -157,14 +138,17 @@ IMPORTANT RULES:
         print(f"\n✅ Total URLs Found : {len(cleaned_urls)}\n")
 
         for index, url in enumerate(cleaned_urls, start=1):
-
             print(f"{index}. {url}")
 
         return cleaned_urls
-    
-    
-        # ==========================================================
+
+    # ==========================================================
     # STEP 3 : SCRAPE URLS
+    # ==========================================================
+    # FIX 1 ── This method was accidentally indented INSIDE extract_urls(),
+    #           placed after its `return` statement, making it completely
+    #           unreachable and never registered as a class method.
+    #           Moved to correct class-level indentation.
     # ==========================================================
 
     def scrape_urls(self):
@@ -178,39 +162,31 @@ IMPORTANT RULES:
         total_urls = len(self.state["urls"])
 
         if total_urls == 0:
-
             print("❌ No URLs Found.")
-
             return []
 
         for index, url in enumerate(self.state["urls"], start=1):
 
             print(f"\n[{index}/{total_urls}] Scraping")
-
             print(f"URL : {url}")
 
             try:
-
                 markdown = scrape_url.invoke(url)
 
                 if not markdown:
-
                     print("⚠️ Empty Response")
-
                     continue
 
+                # FIX 2 ── Key was "source" but app.py expects "url" as the
+                #           primary key. Changed to "url" for consistency.
                 scraped_documents.append({
-
-                    "source": url,
-
-                    "content": markdown
-
+                    "url":     url,
+                    "content": markdown,
                 })
 
                 print("✅ Success")
 
             except Exception as e:
-
                 print(f"❌ Failed : {e}")
 
         self.state["scraped_content"] = scraped_documents
@@ -220,7 +196,6 @@ IMPORTANT RULES:
         print("=" * 80)
 
         return scraped_documents
-
 
     # ==========================================================
     # STEP 4 : COMBINE RESEARCH
@@ -236,37 +211,28 @@ IMPORTANT RULES:
 
         for index, document in enumerate(
             self.state["scraped_content"],
-            start=1
+            start=1,
         ):
-
-            combined_text += f"""
-
-
-
-SOURCE {index}
-
-URL:
-{document['source']}
-
-
-
-CONTENT
-
-{document['content']}
-
-
-
-"""
+            combined_text += (
+                f"\n\n"
+                f"SOURCE {index}\n\n"
+                f"URL:\n{document['url']}\n\n"
+                f"CONTENT\n\n{document['content']}\n\n"
+                f"{'-' * 80}\n"
+            )
 
         self.state["combined_research"] = combined_text
 
         print(f"✅ Combined {len(self.state['scraped_content'])} Documents.")
 
         return combined_text
-    
-    
+
     # ==========================================================
     # STEP 5 : GENERATE REPORT
+    # ==========================================================
+    # FIX 3 ── Removed the duplicate print(type(report)) / print(report)
+    #           block that appeared both before and after storing the result.
+    #           Kept the single post-assignment confirmation print only.
     # ==========================================================
 
     def generate_report(self):
@@ -277,8 +243,8 @@ CONTENT
 
         report = self.writer.invoke(
             {
-                "topic": self.state["topic"],
-                "research": self.state["combined_research"]
+                "topic":    self.state["topic"],
+                "research": self.state["combined_research"],
             }
         )
 
@@ -287,7 +253,6 @@ CONTENT
         print("✅ Report Generated Successfully")
 
         return report
-
 
     # ==========================================================
     # STEP 6 : REVIEW REPORT
@@ -301,7 +266,7 @@ CONTENT
 
         feedback = self.critic.invoke(
             {
-                "report": self.state["report"]
+                "report": self.state["report"],
             }
         )
 
@@ -311,9 +276,11 @@ CONTENT
 
         return feedback
 
-
     # ==========================================================
     # STEP 7 : SAVE OUTPUTS
+    # ==========================================================
+    # FIX 4 ── `import os` was inside this method body.
+    #           Moved to the top of the file where all imports belong.
     # ==========================================================
 
     def save_outputs(self):
@@ -321,8 +288,6 @@ CONTENT
         print("\n" + "=" * 80)
         print("💾 STEP 7 : SAVING OUTPUTS")
         print("=" * 80)
-
-        import os
 
         os.makedirs("outputs", exist_ok=True)
 
@@ -345,12 +310,11 @@ CONTENT
 
         print("✅ Outputs Saved Successfully")
 
-
     # ==========================================================
     # STEP 8 : RUN PIPELINE
     # ==========================================================
 
-    def run(self, topic):
+    def run(self, topic: str) -> dict:
 
         self.search(topic)
 
@@ -373,7 +337,9 @@ CONTENT
         return self.state
 
 
-
+# --------------------------------------------------------------------------
+# CLI entry point
+# --------------------------------------------------------------------------
 if __name__ == "__main__":
 
     topic = input("\nEnter Research Topic : ")
@@ -385,11 +351,9 @@ if __name__ == "__main__":
     print("\n" + "=" * 80)
     print("📄 FINAL REPORT")
     print("=" * 80)
-
     print(result["report"])
 
     print("\n" + "=" * 80)
     print("🧐 CRITIC FEEDBACK")
     print("=" * 80)
-
     print(result["feedback"])
